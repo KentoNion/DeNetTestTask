@@ -1,0 +1,12 @@
+env: "local" # local, prod
+RestServer:
+  host: ""
+  port: ""
+logger:
+  logger_file_path: "../logs.txt" #keep empty for no log file
+postgres_db:
+  user: ""
+  password: ""
+  host: "" #ignored if used by docker
+  sslmode: ""
+  port: ""

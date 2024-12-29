@@ -1,0 +1,11 @@
+env: "local" # local, dev, prod
+auth_db:
+  db_host: localhost #ignored if used by docker
+  db_port:
+  db_user: postgres
+  db_password: postgres
+  db_name: medods_auth
+  db_sslmode: disable
+auth_server:
+  server_host: localhost
+  server_port: 8050
