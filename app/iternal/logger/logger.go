@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"YoutHubBot/internal/config"
+	"app/iternal/config"
 	"fmt"
 	"io"
 	"log"
