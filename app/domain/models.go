@@ -32,7 +32,9 @@ func NewUserService(store UserStore, log *slog.Logger, cfg *config.Config) *User
 }
 
 type User struct {
-	id         UserID
-	score      UserScore
-	registered time.Time
+	Id         UserID
+	Nickname   string
+	Email      string
+	Score      UserScore
+	Registered time.Time
 }
