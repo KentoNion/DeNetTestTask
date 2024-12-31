@@ -10,3 +10,11 @@ postgres_db:
   host: "" #ignored if used by docker
   sslmode: ""
   port: ""
+rewards: #rewards in points for activities
+  10k_daily_steps: 2
+  wake_in_time: 1
+  8h_sleep: 3
+  10_pushups: 1
+  inviting_a_friend: 10
+  being_invited: 5
+  morning_exercise: 5

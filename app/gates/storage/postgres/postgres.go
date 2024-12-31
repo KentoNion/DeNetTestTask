@@ -43,10 +43,10 @@ func (p *Store) AddUser(ctx context.Context, user domain.User) error {
 // Получение информации по пользователю
 func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, error) {
 	const op = "storage.PostgreSQL.GetUser"
-	var user domain.User
 	p.log.Debug(fmt.Sprintf("%v: trying to get info for user %v", op, id))
 	query := p.sm.Select(p.sq.Select(), &user{}).From("users").Where(sq.Eq{"id": id})
 	qry, args, err := query.ToSql()
+	var user domain.User
 	if err != nil {
 		return user, fmt.Errorf("%s: %v", op, err)
 	}
@@ -99,7 +99,35 @@ func (p *Store) AddScore(ctx context.Context, id domain.UserID, points int) erro
 	if rowsAffected == 0 {
 		return fmt.Errorf("%s: no rows affected, user not found", op)
 	}
-
 	p.log.Debug(fmt.Sprintf("%v: successfully added points (%v) to user (%v)", op, points, id))
+	return nil
+}
+
+func (p *Store) SetInvitedBy(ctx context.Context, userID, invitedByID domain.UserID) error {
+	const op = "storage.PostgreSQL.SetInvitedBy"
+	p.log.Debug(fmt.Sprintf("%v: trying to set invited_by for user %v to %v", op, userID, invitedByID))
+	query := p.sq.Update("users").
+		Set("invited_by", invitedByID).
+		Where(sq.And{
+			sq.Eq{"id": userID},
+			sq.Expr("invited_by IS NULL"), // Условие установки: если строка приглашения пустая, тогда можно писать
+		})
+	qry, args, err := query.ToSql()
+	if err != nil {
+		return fmt.Errorf("%s: failed to build query: %v", op, err)
+	}
+	res, err := p.db.ExecContext(ctx, qry, args...)
+	if err != nil {
+		return fmt.Errorf("%s: failed to execute query: %v", op, err)
+	}
+	// Проверка на то что строка была обновлена:
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: failed to get rows affected: %v", op, err)
+	}
+	if rowsAffected == 0 {
+		return ErrUserAlreadyInvited //Если cтрока не была изменена, значит поле invited_by уже было заполнено
+	}
+	p.log.Debug(fmt.Sprintf("%v: successfully set invited_by for user %v to %v", op, userID, invitedByID))
 	return nil
 }
