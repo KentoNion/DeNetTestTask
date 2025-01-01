@@ -15,6 +15,6 @@ rewards: #rewards in points for activities
   wake_in_time: 1
   8h_sleep: 3
   10_pushups: 1
-  inviting_a_friend: 10
-  being_invited: 5
+  inviting_a_friend: 10 #Удаление этой награды сломает процесс добавление рефералов, не меняйте название награды
+  being_invited: 5 #Не меняйте название награды
   morning_exercise: 5

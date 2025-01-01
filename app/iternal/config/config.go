@@ -23,22 +23,12 @@ type Log struct {
 	FilePath string `yaml:"logger_file_path"`
 }
 
-type Rewards struct {
-	DailySteps      int `yaml:"10k_daily_steps"`
-	wakeInTime      int `yaml:"wake_in_time"`
-	SleepFor8h      int `yaml:"8h_sleep"`
-	PushUps         int `yaml:"10_pushups"`
-	InviteAFriend   int `yaml:"inviting_a_friend"`
-	beingInvited    int `yaml:"being_invited"`
-	morningExercise int `yaml:"morning_exercise"`
-}
-
 type Config struct {
-	Env     string  `yaml:"env"`
-	DB      DB      `yaml:"postgres_db"`
-	APIKeys Rest    `yaml:"API_keys"`
-	Log     Log     `yaml:"logger"`
-	Rewards Rewards `yaml:"rewards"`
+	Env     string         `yaml:"env"`
+	DB      DB             `yaml:"postgres_db"`
+	APIKeys Rest           `yaml:"API_keys"`
+	Log     Log            `yaml:"logger"`
+	Rewards map[string]int `yaml:"rewards"` // Ключ — название награды, значение — очки
 }
 
 func MustLoad() *Config {

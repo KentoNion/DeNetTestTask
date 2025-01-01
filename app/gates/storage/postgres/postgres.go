@@ -60,10 +60,29 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 
 // Получение пользователей
 // todo реализовать сортировку по имени, кол-во очков, дате регистрации, прикрутить опциональную пагинацию
-func (p *Store) GetUsers(ctx context.Context) ([]user, error) {
+func (p *Store) GetUsers(ctx context.Context, filter domain.Filter, page int, limit int) ([]user, error) {
 	const op = "storage.PostgreSQL.GetUsers"
 	p.log.Debug(fmt.Sprintf("%v: trying to get all users", op))
 	query := p.sm.Select(p.sq.Select(), &user{}).From("users")
+
+	//фильтрация 0-Рейтинг, 1-алфавит(никнейм), 2-id/дате регистрации
+	switch filter {
+	case "score":
+		query = query.OrderBy("score DESC")
+	case "nickname":
+		query = query.OrderBy("nickname ASK")
+	case "id":
+		query = query.OrderBy("id ASK")
+	default:
+		query = query.OrderBy("id ASK")
+	}
+
+	//Опциональная пагинация
+	if limit != 0 {
+		offset := (page - 1) * limit
+		query = query.Offset(uint64(offset)).Limit(uint64(limit))
+	}
+
 	qry, args, err := query.ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", op, err)
@@ -78,7 +97,7 @@ func (p *Store) GetUsers(ctx context.Context) ([]user, error) {
 }
 
 // добавление score для user по id
-func (p *Store) AddScore(ctx context.Context, id domain.UserID, points int) error {
+func (p *Store) AddPoints(ctx context.Context, id domain.UserID, points int) error {
 	const op = "storage.PostgreSQL.AddScore"
 	p.log.Debug(fmt.Sprintf("%v: trying to add points (%v) to user (%v) score", op, points, id))
 	query := p.sq.Update("users").

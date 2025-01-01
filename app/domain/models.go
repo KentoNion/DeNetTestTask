@@ -2,9 +2,7 @@ package domain
 
 import (
 	"app/iternal/config"
-	"context"
 	"errors"
-	"log/slog"
 	"reflect"
 	"time"
 )
@@ -13,29 +11,7 @@ type UserID string
 type UserScore int
 type Email string
 type Nickname string
-
-type UserService struct {
-	store   UserStore
-	log     *slog.Logger
-	cfg     *config.Config
-	rewards map[string]int
-}
-
-type UserStore interface {
-	GetUser(ctx context.Context, userID UserID) (User, error)
-	NewUser()
-	GetUsers()
-	AddPoints()
-}
-
-func NewUserService(store UserStore, log *slog.Logger, cfg *config.Config) *UserService {
-	return &UserService{
-		store:   store,
-		log:     log,
-		cfg:     cfg,
-		rewards: initRewards(cfg),
-	}
-}
+type Filter string
 
 type User struct {
 	Id         UserID
@@ -47,6 +23,8 @@ type User struct {
 }
 
 var ErrNotEmail = errors.New("not email")
+var ErrNotExistingReward = errors.New("This reward does not exist")
+var ErrNoRewardRef = errors.New("No reward for inviting found")
 
 // функция инициализирующая мапу наград из конфига. Размер награды можно изменять config.yaml
 func initRewards(cfg *config.Config) map[string]int {
