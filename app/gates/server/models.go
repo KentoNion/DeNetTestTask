@@ -2,17 +2,16 @@ package server
 
 import (
 	"app/domain"
-	"context"
 	"time"
 )
 
 type user struct {
 	id         domain.UserID    `json:"id"`
 	nickname   domain.Nickname  `json:"nickname"`
-	email      domain.Email     `json:"email"`
+	email      domain.Email     `json:"email,omitempty"` //omitempty чтоб не палить почту в leaderboard
 	score      domain.UserScore `json:"score"`
 	registered time.Time        `json:"register_date"`
-	invitedBy  domain.UserID    `json:"invited_by,omitempty"`
+	invitedBy  domain.UserID    `json:"invited_by,omitempty"` //omitempty потому что поле может быть пустым + ни к чему в leaderboard
 }
 
 func (u *user) toDomain() domain.User {
@@ -41,8 +40,8 @@ type contextKey string
 
 const userContextKey contextKey = "user"
 
-// FromContext - извлекает пользователя из контекста
-func FromContext(ctx context.Context) (*user, bool) {
-	user, ok := ctx.Value(userContextKey).(*user)
-	return user, ok
+type leaderboardSettings struct {
+	sorter domain.Sorter `json:"sort_by"`
+	page   int           `json:"page"`
+	size   int           `json:"size"`
 }

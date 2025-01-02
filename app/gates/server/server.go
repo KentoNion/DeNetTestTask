@@ -35,7 +35,7 @@ func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *chi
 	r.Method(http.MethodPost, "/register", http.HandlerFunc(server.registerHandler))
 	//эндпоинты с авторизацией
 	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/{id}/status", http.HandlerFunc(server.statusHandler))
-	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/leaderboard", http.HandlerFunc(server.leaderbord))
+	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/leaderboard", http.HandlerFunc(server.leaderboard))
 	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/task/complete", http.HandlerFunc(server.taskCompleteHandler))
 	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/referrer", http.HandlerFunc(server.reffererHandler))
 	server.log.Info("router configured")
@@ -62,7 +62,7 @@ func (s Server) loginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.log.Info(op, ": sucessfully logged in")
+	s.log.Info(op, ": sucesfully logged in")
 	s.log.Debug("token: ", token)
 	resp, err := json.Marshal(token)
 	if err != nil {
@@ -79,7 +79,7 @@ func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 	const op = "gates.server.registerHandler"
 	s.log.Info(op, ": starting register")
 	var user user
-	//декодировка json с параметрами пользователя
+	//декодировка json, извлечение данных нового пользователя
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
 		s.log.Error(op, ": failed to decode request body: "+err.Error())
@@ -133,21 +133,66 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user not found in context", http.StatusInternalServerError)
 		return
 	}
-	//формирование ответа
-	resp, err := json.Marshal(user)
-	if err != nil {
-		s.log.Error(op, ": failed to encode user: ", err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusBadRequest)
-		return
+	var resp []byte
+	var err error
+	//если id из запроса совпадает с тем что был в jwt переданный мидлвер авторизации, то формируем ответ из юзера извлечённым из мидлвера (чтоб сократить кол-во обращений в бд)
+	if user.id == domain.UserID(idParam) {
+		//формирование ответа
+		resp, err = json.Marshal(user)
+		if err != nil {
+			s.log.Error(op, ": failed to encode user: ", err.Error())
+			http.Error(w, "Something went wrong: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else { //если не совпадает, тогда ходим в бд по нужному id и формируем ответ
+		duser, err := s.srv.Status(s.context, domain.UserID(idParam))
+		user = fromDomain(duser)
+		resp, err = json.Marshal(user)
+		if err != nil {
+			s.log.Error(op, ": failed to encode user: ", err.Error())
+			http.Error(w, "Something went wrong: "+err.Error(), http.StatusBadRequest)
+		}
 	}
-	s.log.Info(op, ": sucessfully logged in")
+
+	s.log.Info(op, ": status sucessfully retrieved")
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s Server) leaderbord(writer http.ResponseWriter, request *http.Request) {
-	const op = "gates.server.leaderbord"
+func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
+	const op = "gates.server.leaderboard"
+	s.log.Info(op, ": starting leaderboard")
+	var set leaderboardSettings
+	//декодировка json, попытка извлечь параметры сортировки, номер страницы, размер (опционально)
+	if err := json.NewDecoder(r.Body).Decode(&set); err != nil {
+		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+		s.log.Error(op, ": failed to decode request body: "+err.Error())
+		return
+	}
+	r.Body.Close()
+	leaderboard, err := s.srv.Leaderbord(s.context, set.sorter, set.page, set.size)
+	if err != nil {
+		s.log.Error(op, ": failed to get leaderboard: "+err.Error())
+	}
+	var resp []user //собираю ответ без указания email и информации о приглашении
+	for _, duser := range leaderboard {
+		usr := user{
+			id:         duser.Id,
+			nickname:   duser.Nickname,
+			score:      duser.Score,
+			registered: duser.Registered,
+		}
+		resp = append(resp, usr)
+	}
+	//формируем ответ
+	responce, err := json.Marshal(resp)
+	if err != nil {
+		s.log.Error(op, ": failed to encode leaderboard: ", err.Error())
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(responce)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s Server) taskCompleteHandler(writer http.ResponseWriter, request *http.Request) {

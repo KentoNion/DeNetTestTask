@@ -11,7 +11,7 @@ type UserID string
 type UserScore int
 type Email string
 type Nickname string
-type Filter string
+type Sorter string
 
 type User struct {
 	Id         UserID

@@ -15,7 +15,7 @@ type UserService struct {
 
 type UserStore interface {
 	GetUser(ctx context.Context, id UserID) (User, error)
-	GetUsers(ctx context.Context, filter Filter, page int, limit int) ([]User, error)
+	GetUsers(ctx context.Context, filter Sorter, page int, limit int) ([]User, error)
 	AddPoints(ctx context.Context, id UserID, points int) error
 	SetInvitedBy(ctx context.Context, userID, invitedByID UserID) error
 }
@@ -52,7 +52,7 @@ func (s UserService) Status(ctx context.Context, id UserID) (User, error) {
 	return user, err
 }
 
-func (s UserService) Leaderbord(ctx context.Context, filter Filter, page int, limit int) ([]User, error) {
+func (s UserService) Leaderbord(ctx context.Context, filter Sorter, page int, limit int) ([]User, error) {
 	const op = "UserService.Leaderbord"
 
 	users, err := s.store.GetUsers(ctx, filter, page, limit)

@@ -36,3 +36,9 @@ func (s Server) AuthMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// FromContext - извлекает пользователя из контекста
+func FromContext(ctx context.Context) (user, bool) {
+	user, ok := ctx.Value(userContextKey).(user)
+	return user, ok
+}

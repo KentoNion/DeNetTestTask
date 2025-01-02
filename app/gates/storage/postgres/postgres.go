@@ -60,7 +60,7 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 
 // Получение пользователей
 // todo реализовать сортировку по имени, кол-во очков, дате регистрации, прикрутить опциональную пагинацию
-func (p *Store) GetUsers(ctx context.Context, filter domain.Filter, page int, limit int) ([]user, error) {
+func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, limit int) ([]user, error) {
 	const op = "storage.PostgreSQL.GetUsers"
 	p.log.Debug(fmt.Sprintf("%v: trying to get all users", op))
 	query := p.sm.Select(p.sq.Select(), &user{}).From("users")
