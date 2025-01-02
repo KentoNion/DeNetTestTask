@@ -6,7 +6,6 @@ import (
 	"app/iternal/config"
 	"app/iternal/pkg"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -31,13 +30,14 @@ func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *chi
 		auth:    auth.NewService(db, log, cfg, uuid.New().String(), pkg.NormalClock{}),
 	}
 
-	//роутим эндпоинты
-	r.Method(http.MethodGet, "/login", http.HandlerFunc(server.loginHandler))
+	//роутим эндпоинты авторизации
+	r.Method(http.MethodGet, "/login{id}", http.HandlerFunc(server.loginHandler))
 	r.Method(http.MethodPost, "/register", http.HandlerFunc(server.registerHandler))
-	r.Method(http.MethodGet, "/users/{id}/status", http.HandlerFunc(server.statusHandler))
-	r.Method(http.MethodGet, "/users/leaderboard", http.HandlerFunc(server.leaderbord))
-	r.Method(http.MethodPatch, "/users/{id}/task/complete", http.HandlerFunc(server.taskCompleteHandler))
-	r.Method(http.MethodPatch, "/users/{id}/referrer", http.HandlerFunc(server.reffererHandler))
+	//эндпоинты с авторизацией
+	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/{id}/status", http.HandlerFunc(server.statusHandler))
+	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/leaderboard", http.HandlerFunc(server.leaderbord))
+	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/task/complete", http.HandlerFunc(server.taskCompleteHandler))
+	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/referrer", http.HandlerFunc(server.reffererHandler))
 	server.log.Info("router configured")
 	return server
 }
@@ -46,14 +46,15 @@ func (s Server) loginHandler(w http.ResponseWriter, r *http.Request) {
 	//логин моковый, он требует только ввести id юзера и отдаёт jwt токен
 	const op = "gates.server.loginHandler"
 	s.log.Info(op, ": starting login")
-	var id domain.UserID
-	//читаем запрос
-	if err := json.NewDecoder(r.Body).Decode(&id); err != nil {
-		s.log.Error(op, "failed to decode login", err)
-		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+
+	idParam := chi.URLParam(r, "id")
+	if idParam == "" {
+		s.log.Debug(op, ": empty id")
+		http.Error(w, "Missing user ID", http.StatusBadRequest)
 		return
 	}
-	r.Body.Close()
+	id := domain.UserID(idParam)
+
 	s.log.Debug("login: ", id)
 	token, err := s.auth.Login(s.context, id)
 	if err != nil {
@@ -125,18 +126,11 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing user ID", http.StatusBadRequest)
 		return
 	}
-	s.log.Debug(op, "trying to get status for user:", idParam)
-	userID := domain.UserID(idParam)
-	//Получение пользователя
-	user, err := s.srv.Status(s.context, userID)
-	if err == sql.ErrNoRows { //обработка ошибки что такого пользователя нет
-		s.log.Debug(op, ": user not found")
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		s.log.Error(op, ": failed to get status: "+err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+	//извлекаем юзера из мидлвера
+	user, ok := FromContext(r.Context())
+	if !ok {
+		s.log.Error(op, ": user not found in conext")
+		http.Error(w, "user not found in context", http.StatusInternalServerError)
 		return
 	}
 	//формирование ответа

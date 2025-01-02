@@ -2,6 +2,7 @@ package server
 
 import (
 	"app/domain"
+	"context"
 	"time"
 )
 
@@ -34,4 +35,14 @@ func fromDomain(duser domain.User) user {
 		registered: duser.Registered,
 		invitedBy:  duser.InvitedBy,
 	}
+}
+
+type contextKey string
+
+const userContextKey contextKey = "user"
+
+// FromContext - извлекает пользователя из контекста
+func FromContext(ctx context.Context) (*user, bool) {
+	user, ok := ctx.Value(userContextKey).(*user)
+	return user, ok
 }
