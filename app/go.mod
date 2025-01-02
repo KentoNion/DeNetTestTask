@@ -6,6 +6,8 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/bool64/sqluct v0.2.4
 	github.com/go-chi/chi/v5 v5.2.0
+	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/google/uuid v1.6.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/pressly/goose/v3 v3.24.0

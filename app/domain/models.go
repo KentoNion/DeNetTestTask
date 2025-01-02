@@ -22,7 +22,7 @@ type User struct {
 	InvitedBy  UserID
 }
 
-var ErrNotEmail = errors.New("not email")
+var ErrNotEmail = errors.New("Wrong format of email")
 var ErrNotExistingReward = errors.New("This reward does not exist")
 var ErrNoRewardRef = errors.New("No reward for inviting found")
 
