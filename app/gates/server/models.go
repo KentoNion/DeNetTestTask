@@ -16,7 +16,7 @@ type user struct {
 
 func (u *user) toDomain() domain.User {
 	return domain.User{
-		Id:         u.id,
+		ID:         u.id,
 		Nickname:   u.Nickname,
 		Email:      u.Email,
 		Score:      u.score,
@@ -27,7 +27,7 @@ func (u *user) toDomain() domain.User {
 
 func fromDomain(duser domain.User) user {
 	return user{
-		id:         duser.Id,
+		id:         duser.ID,
 		Nickname:   duser.Nickname,
 		Email:      duser.Email,
 		score:      duser.Score,

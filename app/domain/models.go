@@ -7,19 +7,19 @@ import (
 	"time"
 )
 
-type UserID string
-type UserScore int
+type UserID int64
+type UserScore int64
 type Email string
 type Nickname string
 type Sorter string
 
 type User struct {
-	Id         UserID
-	Nickname   Nickname
-	Email      Email
-	Score      UserScore
-	Registered time.Time
-	InvitedBy  *UserID
+	ID         UserID    `db:"id"`
+	Nickname   Nickname  `db:"nickname"`
+	Email      Email     `db:"email"`
+	Score      UserScore `db:"score"`
+	Registered time.Time `db:"registered"`
+	InvitedBy  *UserID   `db:"invited_by"`
 }
 
 var ErrNotEmail = errors.New("Wrong format of email")

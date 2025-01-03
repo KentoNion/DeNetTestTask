@@ -30,7 +30,7 @@ func (s Server) AuthMiddleware(next http.Handler) http.Handler {
 			http.Error(w, "unauthorized: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
-		s.log.Debug(op, ": Successfully got token thru auth.Authorize for user: ", user.Id)
+		s.log.Debug(op, ": Successfully got token thru auth.Authorize for user: ", user.ID)
 		// Добавляем пользователя в контекст
 		ctx := context.WithValue(r.Context(), userContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))

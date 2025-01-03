@@ -47,7 +47,7 @@ func (s *Service) Login(ctx context.Context, id domain.UserID) (string, error) {
 		return "", err
 	}
 	token := Token{
-		UserID:   user.Id,
+		UserID:   user.ID,
 		Email:    user.Email,
 		Nickname: user.Nickname,
 	}
@@ -99,7 +99,7 @@ func (s *Service) Authorize(ctx context.Context, accessToken string) (domain.Use
 	}
 
 	// Извлекаем данные из токена
-	userID, ok := claims["user_id"].(string)
+	userID, ok := claims["user_id"].(int64)
 	if !ok {
 		s.log.Warn("User ID missing in token", "op", op)
 		return user, fmt.Errorf("user ID missing in token")

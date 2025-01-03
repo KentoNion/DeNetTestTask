@@ -74,8 +74,8 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 		p.log.Error(op, err)
 		return user, err
 	}
-
-	err = p.db.GetContext(ctx, &usr, qry, args...)
+	p.log.Debug(op, "trying to use GetContext")
+	err = p.db.GetContext(ctx, &user, qry, args...)
 	if err != nil {
 		p.log.Error(op, err)
 		return user, err

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"log/slog"
 	"net/http"
+	"strconv"
 )
 
 type Server struct {
@@ -48,10 +49,16 @@ func (s Server) loginHandler(w http.ResponseWriter, r *http.Request) {
 	const op = "gates.server.loginHandler"
 	s.log.Info(op, ": starting login")
 
-	idParam := chi.URLParam(r, "id")
-	if idParam == "" {
+	idParamStr := chi.URLParam(r, "id")
+	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
 		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	idParam, err := strconv.Atoi(idParamStr)
+	if err != nil {
+		s.log.Debug(op, ": failed to convert srt to int Atoi")
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 	id := domain.UserID(idParam)
@@ -126,10 +133,16 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	const op = "gates.server.statusHandler"
 	s.log.Info(op, ": starting status")
 	//извлечение userid из адреса
-	idParam := chi.URLParam(r, "id")
-	if idParam == "" {
+	idParamStr := chi.URLParam(r, "id")
+	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
 		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	idParam, err := strconv.Atoi(idParamStr)
+	if err != nil {
+		s.log.Debug(op, ": failed to convert srt to int Atoi")
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 	//извлекаем юзера из мидлвера
@@ -140,7 +153,6 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp []byte
-	var err error
 	//если id из запроса совпадает с тем что был в jwt переданный мидлвер авторизации, то формируем ответ из юзера извлечённым из мидлвера (чтоб сократить кол-во обращений в бд)
 	if user.id == domain.UserID(idParam) {
 		//формирование ответа
@@ -187,7 +199,7 @@ func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	var resp []user //собираю ответ без указания email и информации о приглашении
 	for _, duser := range leaderboard {
 		usr := user{
-			id:         duser.Id,
+			id:         duser.ID,
 			Nickname:   duser.Nickname,
 			score:      duser.Score,
 			registered: duser.Registered,
@@ -219,10 +231,16 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//получение id из адреса
-	idParam := chi.URLParam(r, "id")
-	if idParam == "" {
+	idParamStr := chi.URLParam(r, "id")
+	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
 		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	idParam, err := strconv.Atoi(idParamStr)
+	if err != nil {
+		s.log.Debug(op, ": failed to convert srt to int Atoi")
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 	if user.id != domain.UserID(idParam) {
@@ -237,7 +255,7 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body.Close()
-	err := s.srv.TaskComplete(s.context, user.id, task)
+	err = s.srv.TaskComplete(s.context, user.id, task)
 	if err != nil {
 		s.log.Error(op, ": failed to complete task: "+err.Error())
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
@@ -259,10 +277,16 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//получение id из адреса
-	idParam := chi.URLParam(r, "id")
-	if idParam == "" {
+	idParamStr := chi.URLParam(r, "id")
+	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
 		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	idParam, err := strconv.Atoi(idParamStr)
+	if err != nil {
+		s.log.Debug(op, ": failed to convert srt to int Atoi")
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 	if user.id != domain.UserID(idParam) {
@@ -276,8 +300,14 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		s.log.Error(op, ": failed to decode request body: "+err.Error())
 		return
 	}
+	ref, err := strconv.Atoi(referrer)
+	if err != nil {
+		s.log.Debug(op, ": failed to convert srt to int Atoi")
+		http.Error(w, "Invalid refferer user ID", http.StatusBadRequest)
+		return
+	}
 	r.Body.Close()
-	err := s.srv.InvitedBy(s.context, user.id, domain.UserID(referrer))
+	err = s.srv.InvitedBy(s.context, user.id, domain.UserID(ref))
 	if err == sql.ErrNoRows {
 		s.log.Debug(op, ": referrer not found")
 		http.Error(w, "referrer not found", http.StatusNotFound)

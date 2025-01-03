@@ -38,7 +38,7 @@ func fromDomain(duser domain.User) user {
 
 func toDomain(usr user) domain.User {
 	return domain.User{
-		Id:         usr.id,
+		ID:         usr.id,
 		Nickname:   usr.nickname,
 		Email:      usr.email,
 		Score:      usr.score,
