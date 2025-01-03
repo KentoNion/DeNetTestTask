@@ -8,7 +8,9 @@ import (
 	"fmt"
 	chi "github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq" //драйвер postgres
 	goose "github.com/pressly/goose/v3"
+	"net/http"
 	"os"
 )
 
@@ -42,4 +44,9 @@ func main() {
 	//Настройка роутера и запуск REST сервера
 	router := chi.NewRouter()
 	_ = server.NewServer(db, cfg, log, router)
+	restServerAddr := cfg.Rest.Host + ":" + cfg.Rest.Port //получение адреса rest сервера из конфига
+	err = http.ListenAndServe(restServerAddr, router)
+	if err != nil {
+		panic(err)
+	}
 }

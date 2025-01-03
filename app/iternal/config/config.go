@@ -26,7 +26,7 @@ type Log struct {
 type Config struct {
 	Env     string         `yaml:"env"`
 	DB      DB             `yaml:"postgres_db"`
-	APIKeys Rest           `yaml:"API_keys"`
+	Rest    Rest           `yaml:"RestServer"`
 	Log     Log            `yaml:"logger"`
 	Rewards map[string]int `yaml:"rewards"` // Ключ — название награды, значение — очки
 }

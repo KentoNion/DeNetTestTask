@@ -32,7 +32,7 @@ func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *chi
 	}
 
 	//роутим эндпоинты авторизации
-	r.Method(http.MethodGet, "/login{id}", http.HandlerFunc(server.loginHandler))
+	r.Method(http.MethodGet, "/login/{id}", http.HandlerFunc(server.loginHandler))
 	r.Method(http.MethodPost, "/register", http.HandlerFunc(server.registerHandler))
 	//эндпоинты с авторизацией
 	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/{id}/status", http.HandlerFunc(server.statusHandler))
@@ -89,18 +89,18 @@ func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 	//проверка наличия никнейма в json
-	if user.nickname == "" { //todo вынести в отдельную функцию, validate user
+	if user.Nickname == "" { //todo вынести в отдельную функцию, validate user
 		s.log.Debug(op, ": no nickname")
 		http.Error(w, "nickname is required", http.StatusBadRequest)
 		return
 	}
-	if user.email == "" { //todo туда же в отдельную функцию
+	if user.Email == "" { //todo туда же в отдельную функцию
 		s.log.Debug(op, ": no email")
 		http.Error(w, "email is required", http.StatusBadRequest)
 		return
 	}
 
-	err := domain.VerifyEmail(user.email)
+	err := domain.VerifyEmail(user.Email)
 	if err != nil {
 		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
 		s.log.Debug(op, ": failed to validate request body: "+err.Error())
@@ -113,7 +113,7 @@ func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.log.Info("registered user", user.nickname)
+	s.log.Info("registered user", user.Nickname)
 	w.WriteHeader(http.StatusCreated) //ответ
 	return
 }
@@ -184,7 +184,7 @@ func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	for _, duser := range leaderboard {
 		usr := user{
 			id:         duser.Id,
-			nickname:   duser.Nickname,
+			Nickname:   duser.Nickname,
 			score:      duser.Score,
 			registered: duser.Registered,
 		}

@@ -68,8 +68,9 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 }
 
 // Получение пользователей
-func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, limit int) ([]user, error) {
+func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, limit int) ([]domain.User, error) {
 	const op = "storage.PostgreSQL.GetUsers"
+	var users []domain.User
 	p.log.Debug(fmt.Sprintf("%v: trying to get all users", op))
 	query := p.sm.Select(p.sq.Select(), &user{}).From("users")
 
@@ -96,7 +97,6 @@ func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, li
 		p.log.Error(op, err)
 		return nil, err
 	}
-	var users []user
 	err = p.db.SelectContext(ctx, &users, qry, args...)
 	if err != nil {
 		p.log.Error(op, err)

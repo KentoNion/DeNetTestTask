@@ -1,15 +1,15 @@
 env: "local" # local, prod
 RestServer:
-  host: ""
-  port: ""
+  host: "localhost"
+  port: "8080"
 logger:
   logger_file_path: "../logs.txt" #keep empty for no log file
 postgres_db:
-  user: ""
-  password: ""
-  host: "" #ignored if used by docker
-  sslmode: ""
-  port: ""
+  user: "postgres"
+  password: "postgres"
+  host: "localhost" #ignored if used by docker
+  sslmode: "disable"
+  port: "8079"
 rewards: #rewards in points for activities
   10k_daily_steps: 2
   wake_in_time: 1

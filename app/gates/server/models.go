@@ -7,8 +7,8 @@ import (
 
 type user struct {
 	id         domain.UserID    `json:"id"`
-	nickname   domain.Nickname  `json:"nickname"`
-	email      domain.Email     `json:"email,omitempty"` //omitempty чтоб не палить почту в leaderboard
+	Nickname   domain.Nickname  `json:"Nickname"`
+	Email      domain.Email     `json:"Email,omitempty"` //omitempty чтоб не палить почту в leaderboard
 	score      domain.UserScore `json:"score"`
 	registered time.Time        `json:"register_date"`
 	invitedBy  domain.UserID    `json:"invited_by,omitempty"` //omitempty потому что поле может быть пустым + ни к чему в leaderboard
@@ -17,8 +17,8 @@ type user struct {
 func (u *user) toDomain() domain.User {
 	return domain.User{
 		Id:         u.id,
-		Nickname:   u.nickname,
-		Email:      u.email,
+		Nickname:   u.Nickname,
+		Email:      u.Email,
 		Score:      u.score,
 		Registered: u.registered,
 		InvitedBy:  u.invitedBy,
@@ -28,8 +28,8 @@ func (u *user) toDomain() domain.User {
 func fromDomain(duser domain.User) user {
 	return user{
 		id:         duser.Id,
-		nickname:   duser.Nickname,
-		email:      duser.Email,
+		Nickname:   duser.Nickname,
+		Email:      duser.Email,
 		score:      duser.Score,
 		registered: duser.Registered,
 		invitedBy:  duser.InvitedBy,
