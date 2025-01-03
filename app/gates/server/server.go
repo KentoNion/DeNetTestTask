@@ -106,14 +106,18 @@ func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 		s.log.Debug(op, ": failed to validate request body: "+err.Error())
 		return
 	}
+	s.log.Debug(op, ": email verified")
 	//Вызов домейновой функции по добавлению пользователя
-	err = s.srv.AddUser(s.context, user.toDomain())
+	s.log.Debug(op, ": trying to make duser")
+	duser := user.toDomain()
+	s.log.Debug(op, ": duser made")
+	err = s.srv.AddUser(s.context, duser)
 	if err != nil {
 		s.log.Error(op, ": failed to add user: "+err.Error())
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.log.Info("registered user", user.Nickname)
+	s.log.Info(op, "registered user", user.Nickname)
 	w.WriteHeader(http.StatusCreated) //ответ
 	return
 }

@@ -43,7 +43,7 @@ func (s *Service) Login(ctx context.Context, id domain.UserID) (string, error) {
 	// Извлекаем пользователя из бд (и проверяем есть ли он там)
 	user, err := s.store.GetUser(ctx, id)
 	if err != nil {
-		s.log.Error("Failed to check user existence", "op", op, "error", err)
+		s.log.Error(op, "Failed to check user existence", err)
 		return "", err
 	}
 	token := Token{

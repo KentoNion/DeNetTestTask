@@ -11,7 +11,7 @@ type user struct {
 	Email      domain.Email     `json:"Email,omitempty"` //omitempty чтоб не палить почту в leaderboard
 	score      domain.UserScore `json:"score"`
 	registered time.Time        `json:"register_date"`
-	invitedBy  domain.UserID    `json:"invited_by,omitempty"` //omitempty потому что поле может быть пустым + ни к чему в leaderboard
+	invitedBy  *domain.UserID   `json:"invited_by,omitempty"` //omitempty потому что поле может быть пустым + ни к чему в leaderboard
 }
 
 func (u *user) toDomain() domain.User {

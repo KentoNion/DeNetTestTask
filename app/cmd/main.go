@@ -36,6 +36,7 @@ func main() {
 	}
 	db := storage.NewDB(conn, log)
 	//накатываем миграцию
+	//err = goose.Down(conn.DB, "./gates\\storage\\migrations")
 	err = goose.Up(conn.DB, "./gates\\storage\\migrations")
 	if err != nil {
 		panic(err)

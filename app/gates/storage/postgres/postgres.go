@@ -21,11 +21,17 @@ func NewDB(db *sqlx.DB, log *slog.Logger) *Store {
 }
 
 // добавление нового пользователя
-func (p *Store) AddUser(ctx context.Context, user domain.User) error {
+func (p *Store) AddUser(ctx context.Context, duser domain.User) error {
 	const op = "storage.Postgres.AddUser"
-	p.log.Debug(fmt.Sprintf("%v: trying to add new user", op))
-	query := p.sm.Insert(p.sq.Insert("users"), user, sqluct.InsertIgnore)
+	user := fromDomain(duser)
+	p.log.Debug(op, user)
+	p.log.Debug(op, "trying to add user")
+	query := p.sq.Insert("users").
+		Columns("nickname", "email").
+		Values(user.nickname, user.email).
+		Suffix("ON CONFLICT (nickname, email) DO NOTHING")
 	qry, args, err := query.ToSql()
+	p.log.Debug(op, "qry: ", qry, "args: ", args)
 	if err != nil {
 		p.log.Error(op, err)
 		return err
@@ -47,9 +53,19 @@ func (p *Store) AddUser(ctx context.Context, user domain.User) error {
 func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, error) {
 	const op = "storage.PostgreSQL.GetUser"
 	p.log.Debug(fmt.Sprintf("%v: trying to get info for user %v", op, id))
-	query := p.sm.Select(p.sq.Select(), &user{}).From("users").Where(sq.Eq{"id": id})
+
+	// Явно указываем поля, которые нам нужны из таблицы
+	query := p.sq.Select("id", "nickname", "email", "score", "registered", "invited_by").
+		From("users").
+		Where(sq.Eq{"id": id})
+
 	qry, args, err := query.ToSql()
+	p.log.Debug(op, "qry: ", qry, "args: ", args)
+
+	var usr user
 	var user domain.User
+
+	// Пытаемся получить данные из базы
 	if err == sql.ErrNoRows {
 		p.log.Debug("user not found")
 		return user, sql.ErrNoRows
@@ -58,11 +74,15 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 		p.log.Error(op, err)
 		return user, err
 	}
-	err = p.db.SelectContext(ctx, &user, qry, args...)
+
+	err = p.db.GetContext(ctx, &usr, qry, args...)
 	if err != nil {
 		p.log.Error(op, err)
 		return user, err
 	}
+
+	// Преобразуем данные в доменную модель
+	user = toDomain(usr)
 	p.log.Debug(fmt.Sprintf("%v: successfully retrieved info for user %v", op, id))
 	return user, nil
 }

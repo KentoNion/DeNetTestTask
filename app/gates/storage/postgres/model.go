@@ -23,8 +23,26 @@ type user struct {
 	email      domain.Email     `db:"email"`
 	score      domain.UserScore `db:"score"`
 	registered time.Time        `db:"registered"`
-	invitedBy  domain.UserID    `db:"invited_by"`
+	invitedBy  *domain.UserID   `db:"invited_by"`
 }
 
 var ErrUserAlreadyInvited = errors.New("User already invited")
 var errNoRowsAffected = errors.New("No rows affected")
+
+func fromDomain(duser domain.User) user {
+	return user{
+		nickname: duser.Nickname,
+		email:    duser.Email,
+	}
+}
+
+func toDomain(usr user) domain.User {
+	return domain.User{
+		Id:         usr.id,
+		Nickname:   usr.nickname,
+		Email:      usr.email,
+		Score:      usr.score,
+		Registered: usr.registered,
+		InvitedBy:  usr.invitedBy,
+	}
+}

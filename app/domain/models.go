@@ -19,7 +19,7 @@ type User struct {
 	Email      Email
 	Score      UserScore
 	Registered time.Time
-	InvitedBy  UserID
+	InvitedBy  *UserID
 }
 
 var ErrNotEmail = errors.New("Wrong format of email")

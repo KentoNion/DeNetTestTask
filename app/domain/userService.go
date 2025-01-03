@@ -18,6 +18,7 @@ type UserStore interface {
 	GetUsers(ctx context.Context, filter Sorter, page int, limit int) ([]User, error)
 	AddPoints(ctx context.Context, id UserID, points int) error
 	SetInvitedBy(ctx context.Context, userID UserID, invitedByID UserID) error
+	AddUser(ctx context.Context, user User) error
 }
 
 func NewUserService(store UserStore, log *slog.Logger, cfg *config.Config) *UserService {
@@ -30,15 +31,12 @@ func NewUserService(store UserStore, log *slog.Logger, cfg *config.Config) *User
 
 func (s UserService) AddUser(ctx context.Context, user User) error {
 	const op = "UserService.AddUser"
-	err := VerifyEmail(user.Email)
-	if err != nil {
-		s.log.Info(op, "user tried to add wrong format email")
-		return err
-	}
-	err = s.AddUser(ctx, user)
+	s.log.Debug(op, "trying to add user")
+	err := s.store.AddUser(ctx, user)
 	if err != nil {
 		return err
 	}
+	s.log.Debug(op, "successfully added user")
 	return nil
 }
 
