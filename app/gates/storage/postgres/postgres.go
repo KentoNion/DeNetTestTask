@@ -27,14 +27,17 @@ func (p *Store) AddUser(ctx context.Context, user domain.User) error {
 	query := p.sm.Insert(p.sq.Insert("users"), user, sqluct.InsertIgnore)
 	qry, args, err := query.ToSql()
 	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	rows, err := p.db.ExecContext(ctx, qry, args...)
 	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	if rows, _ := rows.RowsAffected(); rows == 0 {
-		return fmt.Errorf("%s: %w", op, sql.ErrNoRows)
+		p.log.Error(op, "no rows affected")
+		return errNoRowsAffected
 	}
 	p.log.Debug(fmt.Sprintf("%v: sucessfully added new user", op))
 	return nil
@@ -47,19 +50,24 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 	query := p.sm.Select(p.sq.Select(), &user{}).From("users").Where(sq.Eq{"id": id})
 	qry, args, err := query.ToSql()
 	var user domain.User
+	if err == sql.ErrNoRows {
+		p.log.Debug("user not found")
+		return user, sql.ErrNoRows
+	}
 	if err != nil {
-		return user, fmt.Errorf("%s: %v", op, err)
+		p.log.Error(op, err)
+		return user, err
 	}
 	err = p.db.SelectContext(ctx, &user, qry, args...)
 	if err != nil {
-		return user, fmt.Errorf("%s: %v", op, err)
+		p.log.Error(op, err)
+		return user, err
 	}
 	p.log.Debug(fmt.Sprintf("%v: successfully retrieved info for user %v", op, id))
 	return user, nil
 }
 
 // Получение пользователей
-// todo реализовать сортировку по имени, кол-во очков, дате регистрации, прикрутить опциональную пагинацию
 func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, limit int) ([]user, error) {
 	const op = "storage.PostgreSQL.GetUsers"
 	p.log.Debug(fmt.Sprintf("%v: trying to get all users", op))
@@ -85,12 +93,14 @@ func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, li
 
 	qry, args, err := query.ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%s: %v", op, err)
+		p.log.Error(op, err)
+		return nil, err
 	}
 	var users []user
 	err = p.db.SelectContext(ctx, &users, qry, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %v", op, err)
+		p.log.Error(op, err)
+		return nil, err
 	}
 	p.log.Debug(fmt.Sprintf("%v: success, all users retrieved", op))
 	return users, nil
@@ -105,18 +115,22 @@ func (p *Store) AddPoints(ctx context.Context, id domain.UserID, points int) err
 		Where(sq.Eq{"id": id})
 	qry, args, err := query.ToSql()
 	if err != nil {
-		return fmt.Errorf("%s: %v", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	res, err := p.db.ExecContext(ctx, qry, args...)
 	if err != nil {
-		return fmt.Errorf("%s: %v", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("%s: %v", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("%s: no rows affected, user not found", op)
+		p.log.Error(op, "no rows affected")
+		return errNoRowsAffected
 	}
 	p.log.Debug(fmt.Sprintf("%v: successfully added points (%v) to user (%v)", op, points, id))
 	return nil
@@ -125,6 +139,11 @@ func (p *Store) AddPoints(ctx context.Context, id domain.UserID, points int) err
 func (p *Store) SetInvitedBy(ctx context.Context, userID, invitedByID domain.UserID) error {
 	const op = "storage.PostgreSQL.SetInvitedBy"
 	p.log.Debug(fmt.Sprintf("%v: trying to set invited_by for user %v to %v", op, userID, invitedByID))
+	_, err := p.GetUser(ctx, invitedByID) //todo: костыль для проверки существования пользователя, вообще эту функцию нужно пересобрать в транзакцию
+	if err != nil {
+		p.log.Error(op, err)
+		return err
+	}
 	query := p.sq.Update("users").
 		Set("invited_by", invitedByID).
 		Where(sq.And{
@@ -133,16 +152,19 @@ func (p *Store) SetInvitedBy(ctx context.Context, userID, invitedByID domain.Use
 		})
 	qry, args, err := query.ToSql()
 	if err != nil {
-		return fmt.Errorf("%s: failed to build query: %v", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	res, err := p.db.ExecContext(ctx, qry, args...)
 	if err != nil {
-		return fmt.Errorf("%s: failed to execute query: %v", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	// Проверка на то что строка была обновлена:
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("%s: failed to get rows affected: %v", op, err)
+		p.log.Error(op, err)
+		return err
 	}
 	if rowsAffected == 0 {
 		return ErrUserAlreadyInvited //Если cтрока не была изменена, значит поле invited_by уже было заполнено

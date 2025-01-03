@@ -6,6 +6,7 @@ import (
 	"app/iternal/config"
 	"app/iternal/pkg"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *chi
 	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/{id}/status", http.HandlerFunc(server.statusHandler))
 	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/leaderboard", http.HandlerFunc(server.leaderboard))
 	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/task/complete", http.HandlerFunc(server.taskCompleteHandler))
-	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/referrer", http.HandlerFunc(server.reffererHandler))
+	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/referrer", http.HandlerFunc(server.referrerHandler))
 	server.log.Info("router configured")
 	return server
 }
@@ -73,6 +74,7 @@ func (s Server) loginHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
+	return
 }
 
 func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +160,7 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
 	w.WriteHeader(http.StatusOK)
+	return
 }
 
 func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +177,8 @@ func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	leaderboard, err := s.srv.Leaderbord(s.context, set.sorter, set.page, set.size)
 	if err != nil {
 		s.log.Error(op, ": failed to get leaderboard: "+err.Error())
+		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 	var resp []user //собираю ответ без указания email и информации о приглашении
 	for _, duser := range leaderboard {
@@ -189,16 +194,96 @@ func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	responce, err := json.Marshal(resp)
 	if err != nil {
 		s.log.Error(op, ": failed to encode leaderboard: ", err.Error())
+		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(responce)
 	w.WriteHeader(http.StatusOK)
+	s.log.Info(op, ": leaderboard sucessfully retrieved")
+	return
 }
 
-func (s Server) taskCompleteHandler(writer http.ResponseWriter, request *http.Request) {
-
+func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
+	const op = "gates.server.taskCompleteHandler"
+	//в этом хендлере я подумал что добавлять поинты юзер может только сам себе, так что буду сверять id из authorize мидлвера и id указанный в адрессе, если не сходится то прекращать работу
+	s.log.Info(op, ": starting task complete")
+	user, ok := FromContext(r.Context())
+	if !ok {
+		s.log.Error(op, ": user not found in conext")
+		http.Error(w, "user not found in context", http.StatusInternalServerError)
+		return
+	}
+	//получение id из адреса
+	idParam := chi.URLParam(r, "id")
+	if idParam == "" {
+		s.log.Debug(op, ": empty id")
+		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	if user.id != domain.UserID(idParam) {
+		s.log.Debug(op, ": request user doesn't match auth user")
+		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
+		return
+	}
+	var task string
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+		s.log.Error(op, ": failed to decode request body: "+err.Error())
+		return
+	}
+	r.Body.Close()
+	err := s.srv.TaskComplete(s.context, user.id, task)
+	if err != nil {
+		s.log.Error(op, ": failed to complete task: "+err.Error())
+		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	s.log.Info(op, ": registered task for user", user.id)
+	return
 }
 
-func (s Server) reffererHandler(writer http.ResponseWriter, request *http.Request) {
-
+func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
+	const op = "gates.server.reffererHandler"
+	//Аналогично taskComplete, считаю что рефералки может прописывать юзер только сам себе (указывать кто пригласил)
+	s.log.Info(op, ": starting task complete")
+	user, ok := FromContext(r.Context())
+	if !ok {
+		s.log.Error(op, ": user not found in conext")
+		http.Error(w, "user not found in context", http.StatusInternalServerError)
+		return
+	}
+	//получение id из адреса
+	idParam := chi.URLParam(r, "id")
+	if idParam == "" {
+		s.log.Debug(op, ": empty id")
+		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	if user.id != domain.UserID(idParam) {
+		s.log.Debug(op, ": request user doesn't match auth user")
+		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
+		return
+	}
+	var referrer string
+	if err := json.NewDecoder(r.Body).Decode(&referrer); err != nil {
+		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+		s.log.Error(op, ": failed to decode request body: "+err.Error())
+		return
+	}
+	r.Body.Close()
+	err := s.srv.InvitedBy(s.context, user.id, domain.UserID(referrer))
+	if err == sql.ErrNoRows {
+		s.log.Debug(op, ": referrer not found")
+		http.Error(w, "referrer not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.log.Error(op, ": failed to invited user: "+err.Error())
+		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	s.log.Info(op, ": invited user", user.id)
 }

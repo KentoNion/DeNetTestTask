@@ -27,3 +27,4 @@ type user struct {
 }
 
 var ErrUserAlreadyInvited = errors.New("User already invited")
+var errNoRowsAffected = errors.New("No rows affected")

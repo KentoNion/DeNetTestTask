@@ -17,7 +17,7 @@ type UserStore interface {
 	GetUser(ctx context.Context, id UserID) (User, error)
 	GetUsers(ctx context.Context, filter Sorter, page int, limit int) ([]User, error)
 	AddPoints(ctx context.Context, id UserID, points int) error
-	SetInvitedBy(ctx context.Context, userID, invitedByID UserID) error
+	SetInvitedBy(ctx context.Context, userID UserID, invitedByID UserID) error
 }
 
 func NewUserService(store UserStore, log *slog.Logger, cfg *config.Config) *UserService {
@@ -86,11 +86,11 @@ func (s UserService) InvitedBy(ctx context.Context, id UserID, invitedBy UserID)
 		s.log.Error("No reward for ref")
 		return ErrNoRewardRef
 	}
-	err := s.store.AddPoints(ctx, id, rewardInviter)
+	err := s.store.SetInvitedBy(ctx, id, invitedBy)
 	if err != nil {
 		return err
 	}
-	err = s.store.SetInvitedBy(ctx, id, invitedBy)
+	err = s.store.AddPoints(ctx, id, rewardInviter)
 	if err != nil {
 		return err
 	}
@@ -98,5 +98,6 @@ func (s UserService) InvitedBy(ctx context.Context, id UserID, invitedBy UserID)
 	if err != nil {
 		return err
 	}
+	//todo: По хорошему следовало бы объеденить все эти 3 запроса в одну транзакцию для снижения кол-во запросов к бд и атомарности
 	return nil
 }
