@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -29,7 +28,7 @@ func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *chi
 		context: context.Background(),
 		log:     log,
 		srv:     domain.NewUserService(db, log, cfg),
-		auth:    auth.NewService(db, log, cfg, uuid.New().String(), pkg.NormalClock{}),
+		auth:    auth.NewService(db, log, cfg, "secret", pkg.NormalClock{}),
 	}
 
 	//роутим эндпоинты авторизации
@@ -154,7 +153,7 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var resp []byte
 	//если id из запроса совпадает с тем что был в jwt переданный мидлвер авторизации, то формируем ответ из юзера извлечённым из мидлвера (чтоб сократить кол-во обращений в бд)
-	if user.id == domain.UserID(idParam) {
+	if user.Id == domain.UserID(idParam) {
 		//формирование ответа
 		resp, err = json.Marshal(user)
 		if err != nil {
@@ -199,13 +198,15 @@ func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	var resp []user //собираю ответ без указания email и информации о приглашении
 	for _, duser := range leaderboard {
 		usr := user{
-			id:         duser.ID,
+			Id:         duser.ID,
 			Nickname:   duser.Nickname,
-			score:      duser.Score,
-			registered: duser.Registered,
+			Score:      duser.Score,
+			Registered: duser.Registered,
 		}
+		s.log.Debug(op, usr)
 		resp = append(resp, usr)
 	}
+	s.log.Debug(op, "leaderboard:", resp)
 	//формируем ответ
 	responce, err := json.Marshal(resp)
 	if err != nil {
@@ -243,7 +244,7 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
-	if user.id != domain.UserID(idParam) {
+	if user.Id != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
 		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
 		return
@@ -255,14 +256,14 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body.Close()
-	err = s.srv.TaskComplete(s.context, user.id, task)
+	err = s.srv.TaskComplete(s.context, user.Id, task)
 	if err != nil {
 		s.log.Error(op, ": failed to complete task: "+err.Error())
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	s.log.Info(op, ": registered task for user", user.id)
+	s.log.Info(op, ": registered task for user", user.Id)
 	return
 }
 
@@ -289,7 +290,7 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
-	if user.id != domain.UserID(idParam) {
+	if user.Id != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
 		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
 		return
@@ -307,7 +308,7 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body.Close()
-	err = s.srv.InvitedBy(s.context, user.id, domain.UserID(ref))
+	err = s.srv.InvitedBy(s.context, user.Id, domain.UserID(ref))
 	if err == sql.ErrNoRows {
 		s.log.Debug(op, ": referrer not found")
 		http.Error(w, "referrer not found", http.StatusNotFound)
@@ -319,5 +320,5 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	s.log.Info(op, ": invited user", user.id)
+	s.log.Info(op, ": invited user", user.Id)
 }

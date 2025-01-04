@@ -62,7 +62,6 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 	qry, args, err := query.ToSql()
 	p.log.Debug(op, "qry: ", qry, "args: ", args)
 
-	var usr user
 	var user domain.User
 
 	// Пытаемся получить данные из базы
@@ -81,8 +80,7 @@ func (p *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, err
 		return user, err
 	}
 
-	// Преобразуем данные в доменную модель
-	user = toDomain(usr)
+	p.log.Debug(op, "user:", user)
 	p.log.Debug(fmt.Sprintf("%v: successfully retrieved info for user %v", op, id))
 	return user, nil
 }
@@ -92,18 +90,18 @@ func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, li
 	const op = "storage.PostgreSQL.GetUsers"
 	var users []domain.User
 	p.log.Debug(fmt.Sprintf("%v: trying to get all users", op))
-	query := p.sm.Select(p.sq.Select(), &user{}).From("users")
+	query := p.sq.Select("id", "nickname", "email", "score", "registered", "invited_by").From("users")
 
 	//фильтрация 0-Рейтинг, 1-алфавит(никнейм), 2-id/дате регистрации
 	switch filter {
 	case "score":
 		query = query.OrderBy("score DESC")
 	case "nickname":
-		query = query.OrderBy("nickname ASK")
+		query = query.OrderBy("nickname ASC")
 	case "id":
-		query = query.OrderBy("id ASK")
+		query = query.OrderBy("id ASC")
 	default:
-		query = query.OrderBy("id ASK")
+		query = query.OrderBy("id ASC")
 	}
 
 	//Опциональная пагинация
@@ -113,6 +111,7 @@ func (p *Store) GetUsers(ctx context.Context, filter domain.Sorter, page int, li
 	}
 
 	qry, args, err := query.ToSql()
+	p.log.Debug(op, "qry: ", qry, "args: ", args)
 	if err != nil {
 		p.log.Error(op, err)
 		return nil, err

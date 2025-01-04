@@ -51,6 +51,7 @@ func (s *Service) Login(ctx context.Context, id domain.UserID) (string, error) {
 		Email:    user.Email,
 		Nickname: user.Nickname,
 	}
+	s.log.Debug(op, ": user:", token)
 	claims := token.MapToAccess(s.cl, time.Hour) // TTL = 1 час
 
 	signedToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -72,38 +73,41 @@ func (s *Service) Authorize(ctx context.Context, accessToken string) (domain.Use
 	token, err := jwt.Parse(accessToken, func(t *jwt.Token) (interface{}, error) {
 
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			s.log.Warn("Unexpected signing method", "op", op, "method", t.Header["alg"])
+			s.log.Error("Unexpected signing method", "op", op, "method", t.Header["alg"])
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return []byte(s.secretKey), nil
 	})
 	if err != nil {
-		s.log.Error("Failed to parse token", "op", op, "error", err)
-		return user, fmt.Errorf("invalid token: %w", err)
+		s.log.Error(op, "Failed to parse token", err)
+		return user, err
 	}
-
+	s.log.Debug(op, ": Access parsed successfully")
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
 		s.log.Warn("Invalid token claims", "op", op)
 		return user, fmt.Errorf("invalid token claims")
 	}
+	s.log.Debug(op, ": gained claims")
+	s.log.Debug(op, "claims: ", claims)
 	//Проверяем не истекло ли время жизни токена
 	if exp, ok := claims["exp"].(float64); ok {
 		if time.Unix(int64(exp), 0).Before(time.Now()) {
-			s.log.Warn("Token expired", "op", op)
+			s.log.Debug(op, "token is expired")
 			return user, fmt.Errorf("token has expired")
 		}
 	} else {
-		s.log.Warn("Token expiration missing", "op", op)
+		s.log.Debug("Token expiration missing", "op", op)
 		return user, fmt.Errorf("token expiration missing")
 	}
 
 	// Извлекаем данные из токена
-	userID, ok := claims["user_id"].(int64)
+	userIDFloat, ok := claims["user_id"].(float64)
 	if !ok {
 		s.log.Warn("User ID missing in token", "op", op)
 		return user, fmt.Errorf("user ID missing in token")
 	}
+	userID := int64(userIDFloat)
 	//Проверяем наличие эмеила
 	email, ok := claims["email"].(string)
 	if !ok {

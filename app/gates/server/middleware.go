@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -11,6 +12,7 @@ func (s Server) AuthMiddleware(next http.Handler) http.Handler {
 		const op = "gates.server.authMiddleware"
 		s.log.Info(op, ": starting auth")
 		authHeader := r.Header.Get("Authorization")
+		s.log.Debug("auth header: ", authHeader)
 		if authHeader == "" {
 			http.Error(w, "missing Authorization header", http.StatusUnauthorized)
 			s.log.Debug(op, ": no auth header")
@@ -24,7 +26,7 @@ func (s Server) AuthMiddleware(next http.Handler) http.Handler {
 		}
 		token := parts[1]
 		// Проверяем токен через auth.Authorize
-		s.log.Debug(op, ": trying to get token thru auth.Authorize")
+		s.log.Debug(fmt.Sprintf("%s: trying to get token thru auth.Authorize with token: %s", op, token))
 		user, err := s.auth.Authorize(s.context, token)
 		if err != nil {
 			http.Error(w, "unauthorized: "+err.Error(), http.StatusUnauthorized)

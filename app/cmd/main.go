@@ -21,6 +21,8 @@ func main() {
 
 	//регистрация логгера
 	log := logger.MustInitLogger(cfg)
+	log.Info("starting app")
+	log.Debug("debug logging enabled")
 
 	//регистрация бд
 	// получение значение DB_HOST из среды, значение среды todo: прописать значение среды в docker-compose
