@@ -40,7 +40,7 @@ func (s Server) AuthMiddleware(next http.Handler) http.Handler {
 }
 
 // FromContext - извлекает пользователя из контекста
-func FromContext(ctx context.Context) (user, bool) {
+func userFromContext(ctx context.Context) (user, bool) {
 	user, ok := ctx.Value(userContextKey).(user)
 	return user, ok
 }

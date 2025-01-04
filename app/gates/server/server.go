@@ -145,7 +145,7 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//извлекаем юзера из мидлвера
-	user, ok := FromContext(r.Context())
+	user, ok := userFromContext(r.Context())
 	if !ok {
 		s.log.Error(op, ": user not found in conext")
 		http.Error(w, "user not found in context", http.StatusInternalServerError)
@@ -225,7 +225,7 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 	const op = "gates.server.taskCompleteHandler"
 	//в этом хендлере я подумал что добавлять поинты юзер может только сам себе, так что буду сверять id из authorize мидлвера и id указанный в адрессе, если не сходится то прекращать работу
 	s.log.Info(op, ": starting task complete")
-	user, ok := FromContext(r.Context())
+	user, ok := userFromContext(r.Context())
 	if !ok {
 		s.log.Error(op, ": user not found in conext")
 		http.Error(w, "user not found in context", http.StatusInternalServerError)
@@ -271,7 +271,7 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 	const op = "gates.server.reffererHandler"
 	//Аналогично taskComplete, считаю что рефералки может прописывать юзер только сам себе (указывать кто пригласил)
 	s.log.Info(op, ": starting task complete")
-	user, ok := FromContext(r.Context())
+	user, ok := userFromContext(r.Context())
 	if !ok {
 		s.log.Error(op, ": user not found in conext")
 		http.Error(w, "user not found in context", http.StatusInternalServerError)
