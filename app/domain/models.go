@@ -11,7 +11,6 @@ type UserID int64
 type UserScore int64
 type Email string
 type Nickname string
-type Sorter string
 
 type User struct {
 	ID         UserID    `db:"id"`

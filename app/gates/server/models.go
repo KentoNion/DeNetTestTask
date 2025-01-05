@@ -40,8 +40,12 @@ type contextKey string
 
 const userContextKey contextKey = "user"
 
-type leaderboardSettings struct {
-	sorter domain.Sorter `json:"sort_by"`
-	page   int           `json:"page"`
-	size   int           `json:"size"`
+type LeaderboardSettings struct {
+	SortBy string `json:"sort_by"`
+	Page   int    `json:"page"`
+	Size   int    `json:"size"`
+}
+
+type TaskRequest struct {
+	Task string `json:"task"`
 }

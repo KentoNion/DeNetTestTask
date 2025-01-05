@@ -1,6 +1,7 @@
 package server
 
 import (
+	"app/domain"
 	"context"
 	"fmt"
 	"net/http"
@@ -40,7 +41,7 @@ func (s Server) AuthMiddleware(next http.Handler) http.Handler {
 }
 
 // FromContext - извлекает пользователя из контекста
-func userFromContext(ctx context.Context) (user, bool) {
-	user, ok := ctx.Value(userContextKey).(user)
+func userFromContext(ctx context.Context) (domain.User, bool) {
+	user, ok := ctx.Value(userContextKey).(domain.User)
 	return user, ok
 }

@@ -145,6 +145,7 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//извлекаем юзера из мидлвера
+	var user domain.User
 	user, ok := userFromContext(r.Context())
 	if !ok {
 		s.log.Error(op, ": user not found in conext")
@@ -153,7 +154,7 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var resp []byte
 	//если id из запроса совпадает с тем что был в jwt переданный мидлвер авторизации, то формируем ответ из юзера извлечённым из мидлвера (чтоб сократить кол-во обращений в бд)
-	if user.Id == domain.UserID(idParam) {
+	if user.ID == domain.UserID(idParam) {
 		//формирование ответа
 		resp, err = json.Marshal(user)
 		if err != nil {
@@ -162,8 +163,7 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else { //если не совпадает, тогда ходим в бд по нужному id и формируем ответ
-		duser, err := s.srv.Status(s.context, domain.UserID(idParam))
-		user = fromDomain(duser)
+		user, err := s.srv.Status(s.context, domain.UserID(idParam))
 		resp, err = json.Marshal(user)
 		if err != nil {
 			s.log.Error(op, ": failed to encode user: ", err.Error())
@@ -181,7 +181,7 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	const op = "gates.server.leaderboard"
 	s.log.Info(op, ": starting leaderboard")
-	var set leaderboardSettings
+	var set LeaderboardSettings
 	//декодировка json, попытка извлечь параметры сортировки, номер страницы, размер (опционально)
 	if err := json.NewDecoder(r.Body).Decode(&set); err != nil {
 		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
@@ -189,7 +189,8 @@ func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body.Close()
-	leaderboard, err := s.srv.Leaderbord(s.context, set.sorter, set.page, set.size)
+	s.log.Debug(op, "leaderboard settings: ", set)
+	leaderboard, err := s.srv.Leaderbord(s.context, set.SortBy, set.Page, set.Size)
 	if err != nil {
 		s.log.Error(op, ": failed to get leaderboard: "+err.Error())
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
@@ -244,26 +245,27 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
-	if user.Id != domain.UserID(idParam) {
+	if user.ID != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
 		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
 		return
 	}
-	var task string
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+	var req TaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
 		s.log.Error(op, ": failed to decode request body: "+err.Error())
 		return
 	}
 	r.Body.Close()
-	err = s.srv.TaskComplete(s.context, user.Id, task)
+	task := req.Task
+	err = s.srv.TaskComplete(s.context, user.ID, task)
 	if err != nil {
 		s.log.Error(op, ": failed to complete task: "+err.Error())
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	s.log.Info(op, ": registered task for user", user.Id)
+	s.log.Info(op, ": registered task for user", user.ID)
 	return
 }
 
@@ -290,7 +292,7 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
-	if user.Id != domain.UserID(idParam) {
+	if user.ID != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
 		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
 		return
@@ -308,7 +310,7 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body.Close()
-	err = s.srv.InvitedBy(s.context, user.Id, domain.UserID(ref))
+	err = s.srv.InvitedBy(s.context, user.ID, domain.UserID(ref))
 	if err == sql.ErrNoRows {
 		s.log.Debug(op, ": referrer not found")
 		http.Error(w, "referrer not found", http.StatusNotFound)
@@ -320,5 +322,5 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	s.log.Info(op, ": invited user", user.Id)
+	s.log.Info(op, ": invited user", user.ID)
 }
