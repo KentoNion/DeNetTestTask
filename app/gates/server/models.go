@@ -40,12 +40,19 @@ type contextKey string
 
 const userContextKey contextKey = "user"
 
+// Структура для чтения JSON с насстройками лидерборды, она необязательна, по умолчанию лидерборда выводится сортируясь по id
 type LeaderboardSettings struct {
-	SortBy string `json:"sort_by"`
+	SortBy string `json:"sort_by"` //score,id,nickname
 	Page   int    `json:"page"`
 	Size   int    `json:"size"`
 }
 
+// структура для чтения JSON в которую пишется выполенный таск
 type TaskRequest struct {
 	Task string `json:"task"`
+}
+
+// структура для чтения JSON referrerHandler, считывает "кто пригласил"
+type RefRequest struct {
+	ID string `json:"referrer"`
 }

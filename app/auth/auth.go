@@ -68,7 +68,7 @@ func (s *Service) Login(ctx context.Context, id domain.UserID) (string, error) {
 func (s *Service) Authorize(ctx context.Context, accessToken string) (domain.User, error) {
 	const op = "auth.Authorize"
 	var user domain.User
-	s.log.Debug(op, ": trying to authorize user")
+	s.log.Debug(op, "msg", "trying to authorize user")
 
 	token, err := jwt.Parse(accessToken, func(t *jwt.Token) (interface{}, error) {
 

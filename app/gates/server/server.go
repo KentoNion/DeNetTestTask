@@ -96,13 +96,13 @@ func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 	//проверка наличия никнейма в json
 	if user.Nickname == "" { //todo вынести в отдельную функцию, validate user
-		s.log.Debug(op, ": no nickname")
-		http.Error(w, "nickname is required", http.StatusBadRequest)
+		s.log.Debug(op, ": No nickname")
+		http.Error(w, "Nickname and Email is required", http.StatusBadRequest)
 		return
 	}
 	if user.Email == "" { //todo туда же в отдельную функцию
 		s.log.Debug(op, ": no email")
-		http.Error(w, "email is required", http.StatusBadRequest)
+		http.Error(w, "Email is required", http.StatusBadRequest)
 		return
 	}
 
@@ -141,14 +141,14 @@ func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	idParam, err := strconv.Atoi(idParamStr)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		http.Error(w, "User ID must consist of numbers only", http.StatusBadRequest)
 		return
 	}
 	//извлекаем юзера из мидлвера
 	var user domain.User
 	user, ok := userFromContext(r.Context())
 	if !ok {
-		s.log.Error(op, ": user not found in conext")
+		s.log.Error(op, ": user not found in context")
 		http.Error(w, "user not found in context", http.StatusInternalServerError)
 		return
 	}
@@ -228,8 +228,8 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 	s.log.Info(op, ": starting task complete")
 	user, ok := userFromContext(r.Context())
 	if !ok {
-		s.log.Error(op, ": user not found in conext")
-		http.Error(w, "user not found in context", http.StatusInternalServerError)
+		s.log.Error(op, ": user not found in context")
+		http.Error(w, "Lost data from auth", http.StatusInternalServerError)
 		return
 	}
 	//получение id из адреса
@@ -247,18 +247,23 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if user.ID != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
-		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
+		http.Error(w, "You don't have permission, you may add points only to your account", http.StatusBadRequest)
 		return
 	}
 	var req TaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
-		s.log.Error(op, ": failed to decode request body: "+err.Error())
+		s.log.Error(op, ": Failed to decode request body: "+err.Error())
 		return
 	}
 	r.Body.Close()
 	task := req.Task
 	err = s.srv.TaskComplete(s.context, user.ID, task)
+	if err == domain.ErrNotExistingReward {
+		s.log.Debug(op, "User tried to claim not existing reward")
+		http.Error(w, "This task doesn't exist", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		s.log.Error(op, ": failed to complete task: "+err.Error())
 		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
@@ -272,11 +277,11 @@ func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
 func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 	const op = "gates.server.reffererHandler"
 	//Аналогично taskComplete, считаю что рефералки может прописывать юзер только сам себе (указывать кто пригласил)
-	s.log.Info(op, ": starting task complete")
+	s.log.Info(op, ": starting refferer Handler")
 	user, ok := userFromContext(r.Context())
 	if !ok {
 		s.log.Error(op, ": user not found in conext")
-		http.Error(w, "user not found in context", http.StatusInternalServerError)
+		http.Error(w, "Lost data from auth", http.StatusInternalServerError)
 		return
 	}
 	//получение id из адреса
@@ -289,31 +294,31 @@ func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
 	idParam, err := strconv.Atoi(idParamStr)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		http.Error(w, "User ID must consist of numbers only", http.StatusBadRequest) //если не сработал atoi, пользователь явно ввёл что-то кроме цифр как idшник
 		return
 	}
 	if user.ID != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
-		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest)
+		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest) //Права на вписание "пригласившего" есть только у приглашённого
 		return
 	}
-	var referrer string
+	var referrer RefRequest
 	if err := json.NewDecoder(r.Body).Decode(&referrer); err != nil {
 		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
 		s.log.Error(op, ": failed to decode request body: "+err.Error())
 		return
 	}
-	ref, err := strconv.Atoi(referrer)
+	ref, err := strconv.Atoi(referrer.ID)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "Invalid refferer user ID", http.StatusBadRequest)
+		http.Error(w, "Referrer user ID must consist of numbers only", http.StatusBadRequest) //если не сработал atoi, пользователь явно ввёл что-то кроме цифр как idшник
 		return
 	}
 	r.Body.Close()
 	err = s.srv.InvitedBy(s.context, user.ID, domain.UserID(ref))
 	if err == sql.ErrNoRows {
 		s.log.Debug(op, ": referrer not found")
-		http.Error(w, "referrer not found", http.StatusNotFound)
+		http.Error(w, "Referrer not found, no such user", http.StatusNotFound) //не нашёлся пригласивший в бд
 		return
 	}
 	if err != nil {

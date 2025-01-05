@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  user-service:
+    build: ./
+    command: ./app
+    ports:
+      - 8050:8050
+    environment:
+      - DB_HOST=db
+      - MIGRATIONS_PATH=./migrations
+      - CONFIG_PATH=./config.yaml
+    depends_on:
+      - db
+  db:
+    restart: always
+    image: postgres:latest
+    volumes:
+      - ./.database/postgres/data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=denet_test_task

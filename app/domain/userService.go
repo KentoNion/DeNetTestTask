@@ -88,11 +88,11 @@ func (s UserService) InvitedBy(ctx context.Context, id UserID, invitedBy UserID)
 	if err != nil {
 		return err
 	}
-	err = s.store.AddPoints(ctx, id, rewardInviter)
+	err = s.store.AddPoints(ctx, id, rewardInvited)
 	if err != nil {
 		return err
 	}
-	err = s.store.AddPoints(ctx, invitedBy, rewardInvited)
+	err = s.store.AddPoints(ctx, invitedBy, rewardInviter)
 	if err != nil {
 		return err
 	}

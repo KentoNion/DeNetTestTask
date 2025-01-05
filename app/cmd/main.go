@@ -38,8 +38,12 @@ func main() {
 	}
 	db := storage.NewDB(conn, log)
 	//накатываем миграцию
-	//err = goose.Down(conn.DB, "./gates\\storage\\migrations")
-	err = goose.Up(conn.DB, "./gates\\storage\\migrations")
+	migrationsPath := os.Getenv("MIGRATIONS_PATH") //для докера
+	if migrationsPath == "" {
+		migrationsPath = "./gates\\storage\\migrations"
+	}
+	//err = goose.Down(conn.DB, migrationsPath)
+	err = goose.Up(conn.DB, migrationsPath)
 	if err != nil {
 		panic(err)
 	}
