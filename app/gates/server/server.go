@@ -7,8 +7,7 @@ import (
 	"app/iternal/pkg"
 	"context"
 	"database/sql"
-	"encoding/json"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -22,7 +21,7 @@ type Server struct {
 	auth    *auth.Service
 }
 
-func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *chi.Mux) *Server {
+func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *gin.Engine) *Server {
 	server := &Server{ //формируем структуру сервера
 		db:      db,
 		context: context.Background(),
@@ -32,32 +31,36 @@ func NewServer(db domain.UserStore, cfg *config.Config, log *slog.Logger, r *chi
 	}
 
 	//роутим эндпоинты авторизации
-	r.Method(http.MethodGet, "/login/{id}", http.HandlerFunc(server.loginHandler))
-	r.Method(http.MethodPost, "/register", http.HandlerFunc(server.registerHandler))
+	r.GET("/login/:id", server.loginHandler)
+	r.POST("/register", server.registerHandler)
 	//эндпоинты с авторизацией
-	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/{id}/status", http.HandlerFunc(server.statusHandler))
-	r.With(server.AuthMiddleware).Method(http.MethodGet, "/users/leaderboard", http.HandlerFunc(server.leaderboard))
-	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/task/complete", http.HandlerFunc(server.taskCompleteHandler))
-	r.With(server.AuthMiddleware).Method(http.MethodPatch, "/users/{id}/referrer", http.HandlerFunc(server.referrerHandler))
+	authorized := r.Group("/")
+	authorized.Use(server.AuthMiddleware())
+	{
+		authorized.GET("/users/:id/status", server.statusHandler)
+		authorized.GET("/users/leaderboard", server.leaderboard)
+		authorized.PATCH("/users/:id/task/complete", server.taskCompleteHandler)
+		authorized.PATCH("/users/:id/referrer", server.referrerHandler)
+	}
 	server.log.Info("router configured")
 	return server
 }
 
-func (s Server) loginHandler(w http.ResponseWriter, r *http.Request) {
+func (s Server) loginHandler(c *gin.Context) {
 	//логин моковый, он требует только ввести id юзера и отдаёт jwt токен
 	const op = "gates.server.loginHandler"
 	s.log.Info(op, ": starting login")
 
-	idParamStr := chi.URLParam(r, "id")
+	idParamStr := c.Param("id")
 	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
 	idParam, err := strconv.Atoi(idParamStr)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	id := domain.UserID(idParam)
@@ -66,50 +69,42 @@ func (s Server) loginHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := s.auth.Login(s.context, id)
 	if err != nil {
 		s.log.Error(op, ": failed to login: "+err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	s.log.Info(op, ": sucesfully logged in")
-	s.log.Debug("token: ", token)
-	resp, err := json.Marshal(token)
-	if err != nil {
-		s.log.Error(op, ": failed to encode token: ", err.Error())
-		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
+	s.log.Debug(op, "token: ", token)
+
+	c.JSON(http.StatusOK, token)
 	return
 }
 
-func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
+func (s Server) registerHandler(c *gin.Context) {
 	const op = "gates.server.registerHandler"
 	s.log.Info(op, ": starting register")
 	var user user
 	//декодировка json, извлечение данных нового пользователя
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&user); err != nil {
 		s.log.Error(op, ": failed to decode request body: "+err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"invalid request": err.Error()})
 		return
 	}
-	r.Body.Close()
+
 	//проверка наличия никнейма в json
 	if user.Nickname == "" { //todo вынести в отдельную функцию, validate user
 		s.log.Debug(op, ": No nickname")
-		http.Error(w, "Nickname and Email is required", http.StatusBadRequest)
-		return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "nickname is required"})
 	}
 	if user.Email == "" { //todo туда же в отдельную функцию
 		s.log.Debug(op, ": no email")
-		http.Error(w, "Email is required", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
 		return
 	}
 
 	err := domain.VerifyEmail(user.Email)
 	if err != nil {
-		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
 		s.log.Debug(op, ": failed to validate request body: "+err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"failed do validate email adress: ": err.Error()})
 		return
 	}
 	s.log.Debug(op, ": email verified")
@@ -120,80 +115,76 @@ func (s Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 	err = s.srv.AddUser(s.context, duser)
 	if err != nil {
 		s.log.Error(op, ": failed to add user: "+err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	s.log.Info(op, "registered user", user.Nickname)
-	w.WriteHeader(http.StatusCreated) //ответ
+	c.Status(http.StatusCreated) //ответ
 	return
 }
 
-func (s Server) statusHandler(w http.ResponseWriter, r *http.Request) {
+func (s Server) statusHandler(c *gin.Context) {
 	const op = "gates.server.statusHandler"
 	s.log.Info(op, ": starting status")
 	//извлечение userid из адреса
-	idParamStr := chi.URLParam(r, "id")
+	idParamStr := c.Param("id")
 	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
 	idParam, err := strconv.Atoi(idParamStr)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "User ID must consist of numbers only", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error:": "User ID must consist of numbers only"})
 		return
 	}
 	//извлекаем юзера из мидлвера
-	var user domain.User
-	user, ok := userFromContext(r.Context())
+	userAny, ok := c.Get("user")
 	if !ok {
 		s.log.Error(op, ": user not found in context")
-		http.Error(w, "user not found in context", http.StatusInternalServerError)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found in context"})
 		return
 	}
-	var resp []byte
+	user, ok := userAny.(domain.User)
+	if !ok {
+		s.log.Error(op, "failed to convert user to domain.User", userAny)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "internal server error"})
+		return
+	}
 	//если id из запроса совпадает с тем что был в jwt переданный мидлвер авторизации, то формируем ответ из юзера извлечённым из мидлвера (чтоб сократить кол-во обращений в бд)
 	if user.ID == domain.UserID(idParam) {
 		//формирование ответа
-		resp, err = json.Marshal(user)
-		if err != nil {
-			s.log.Error(op, ": failed to encode user: ", err.Error())
-			http.Error(w, "Something went wrong: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-	} else { //если не совпадает, тогда ходим в бд по нужному id и формируем ответ
-		user, err := s.srv.Status(s.context, domain.UserID(idParam))
-		resp, err = json.Marshal(user)
-		if err != nil {
-			s.log.Error(op, ": failed to encode user: ", err.Error())
-			http.Error(w, "Something went wrong: "+err.Error(), http.StatusBadRequest)
-		}
+		s.log.Info(op, ": status sucessfully retrieved", "logged user = requested user")
+		c.JSON(http.StatusOK, user)
+		return
+	}
+	user, err = s.srv.Status(s.context, domain.UserID(idParam))
+	if err != nil {
+		s.log.Error(op, ": failed to status user: "+err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
 	s.log.Info(op, ": status sucessfully retrieved")
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
-	w.WriteHeader(http.StatusOK)
+	c.JSON(http.StatusOK, user)
 	return
 }
 
-func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
+func (s Server) leaderboard(c *gin.Context) {
 	const op = "gates.server.leaderboard"
 	s.log.Info(op, ": starting leaderboard")
 	var set LeaderboardSettings
 	//декодировка json, попытка извлечь параметры сортировки, номер страницы, размер (опционально)
-	if err := json.NewDecoder(r.Body).Decode(&set); err != nil {
-		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&set); err != nil {
 		s.log.Error(op, ": failed to decode request body: "+err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"Invalid request": err.Error()})
 		return
 	}
-	r.Body.Close()
 	s.log.Debug(op, "leaderboard settings: ", set)
 	leaderboard, err := s.srv.Leaderbord(s.context, set.SortBy, set.Page, set.Size)
 	if err != nil {
 		s.log.Error(op, ": failed to get leaderboard: "+err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"Something went wrong": err.Error()})
 		return
 	}
 	var resp []user //собираю ответ без указания email и информации о приглашении
@@ -208,124 +199,126 @@ func (s Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, usr)
 	}
 	s.log.Debug(op, "leaderboard:", resp)
-	//формируем ответ
-	responce, err := json.Marshal(resp)
-	if err != nil {
-		s.log.Error(op, ": failed to encode leaderboard: ", err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(responce)
-	w.WriteHeader(http.StatusOK)
+
 	s.log.Info(op, ": leaderboard sucessfully retrieved")
+	c.JSON(http.StatusOK, resp)
 	return
 }
 
-func (s Server) taskCompleteHandler(w http.ResponseWriter, r *http.Request) {
+func (s Server) taskCompleteHandler(c *gin.Context) {
 	const op = "gates.server.taskCompleteHandler"
 	//в этом хендлере я подумал что добавлять поинты юзер может только сам себе, так что буду сверять id из authorize мидлвера и id указанный в адрессе, если не сходится то прекращать работу
 	s.log.Info(op, ": starting task complete")
-	user, ok := userFromContext(r.Context())
+	userAny, ok := c.Get("user")
 	if !ok {
 		s.log.Error(op, ": user not found in context")
-		http.Error(w, "Lost data from auth", http.StatusInternalServerError)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found in context"})
+		return
+	}
+	user, ok := userAny.(domain.User)
+	if !ok {
+		s.log.Error(op, ": user not found in context")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "can't map user to domain.User"})
 		return
 	}
 	//получение id из адреса
-	idParamStr := chi.URLParam(r, "id")
+	idParamStr := c.Param("id")
 	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
 		return
 	}
 	idParam, err := strconv.Atoi(idParamStr)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Id must consist of numbers only"})
 		return
 	}
 	if user.ID != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
-		http.Error(w, "You don't have permission, you may add points only to your account", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You don't have permission, you may add points only to your account"})
 		return
 	}
 	var req TaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
-		s.log.Error(op, ": Failed to decode request body: "+err.Error())
+	if err := c.ShouldBindJSON(&req); err != nil {
+		s.log.Debug(op, ": failed to decode request body: ", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to decode request body: " + err.Error()})
 		return
 	}
-	r.Body.Close()
 	task := req.Task
 	err = s.srv.TaskComplete(s.context, user.ID, task)
 	if err == domain.ErrNotExistingReward {
 		s.log.Debug(op, "User tried to claim not existing reward")
-		http.Error(w, "This task doesn't exist", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This task doesn't exist"})
 		return
 	}
 	if err != nil {
 		s.log.Error(op, ": failed to complete task: "+err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong"})
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
 	s.log.Info(op, ": registered task for user", user.ID)
+	c.Status(http.StatusOK)
 	return
 }
 
-func (s Server) referrerHandler(w http.ResponseWriter, r *http.Request) {
+func (s Server) referrerHandler(c *gin.Context) {
 	const op = "gates.server.reffererHandler"
 	//Аналогично taskComplete, считаю что рефералки может прописывать юзер только сам себе (указывать кто пригласил)
 	s.log.Info(op, ": starting refferer Handler")
-	user, ok := userFromContext(r.Context())
+	userAny, ok := c.Get("user")
 	if !ok {
 		s.log.Error(op, ": user not found in conext")
-		http.Error(w, "Lost data from auth", http.StatusInternalServerError)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found in context"})
+		return
+	}
+	user, ok := userAny.(domain.User)
+	if !ok {
+		s.log.Error(op, ": can't map user to domain.User")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
 		return
 	}
 	//получение id из адреса
-	idParamStr := chi.URLParam(r, "id")
+	idParamStr := c.Param("id")
 	if idParamStr == "" {
 		s.log.Debug(op, ": empty id")
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
 		return
 	}
 	idParam, err := strconv.Atoi(idParamStr)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "User ID must consist of numbers only", http.StatusBadRequest) //если не сработал atoi, пользователь явно ввёл что-то кроме цифр как idшник
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Id must consist of numbers only"})
 		return
 	}
 	if user.ID != domain.UserID(idParam) {
 		s.log.Debug(op, ": request user doesn't match auth user")
-		http.Error(w, "you don't have permission, you may add points only to your account", http.StatusBadRequest) //Права на вписание "пригласившего" есть только у приглашённого
+		c.JSON(http.StatusBadRequest, gin.H{"error": "you don't have permission, you may add points only to your account"})
 		return
 	}
 	var referrer RefRequest
-	if err := json.NewDecoder(r.Body).Decode(&referrer); err != nil {
-		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&referrer); err != nil {
 		s.log.Error(op, ": failed to decode request body: "+err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to decode request body: " + err.Error()})
 		return
 	}
 	ref, err := strconv.Atoi(referrer.ID)
 	if err != nil {
 		s.log.Debug(op, ": failed to convert srt to int Atoi")
-		http.Error(w, "Referrer user ID must consist of numbers only", http.StatusBadRequest) //если не сработал atoi, пользователь явно ввёл что-то кроме цифр как idшник
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Id must consist of numbers only"})
 		return
 	}
-	r.Body.Close()
 	err = s.srv.InvitedBy(s.context, user.ID, domain.UserID(ref))
 	if err == sql.ErrNoRows {
 		s.log.Debug(op, ": referrer not found")
-		http.Error(w, "Referrer not found, no such user", http.StatusNotFound) //не нашёлся пригласивший в бд
+		c.JSON(http.StatusNotFound, gin.H{"error": "referrer not found"})
 		return
 	}
 	if err != nil {
 		s.log.Error(op, ": failed to invited user: "+err.Error())
-		http.Error(w, "Something went wrong: "+err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong"})
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
 	s.log.Info(op, ": invited user", user.ID)
+	c.Status(http.StatusOK)
 }

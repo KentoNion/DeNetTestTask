@@ -18,7 +18,7 @@ type UserStore interface {
 	GetUsers(ctx context.Context, string string, page int, limit int) ([]User, error)
 	AddPoints(ctx context.Context, id UserID, points int) error
 	SetInvitedBy(ctx context.Context, userID UserID, invitedByID UserID) error
-	AddUser(ctx context.Context, user User) error
+	AddUser(ctx context.Context, duser User) error
 }
 
 func NewUserService(store UserStore, log *slog.Logger, cfg *config.Config) *UserService {
